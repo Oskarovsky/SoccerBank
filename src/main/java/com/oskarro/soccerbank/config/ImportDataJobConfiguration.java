@@ -6,6 +6,7 @@ import com.oskarro.soccerbank.entity.clubData.ClubDataAddressUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataBaseUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataContactUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataUpdate;
+import com.oskarro.soccerbank.entity.transaction.Transaction;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
@@ -13,9 +14,12 @@ import org.springframework.batch.core.configuration.annotation.StepBuilderFactor
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
+import org.springframework.batch.item.database.JdbcCursorItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
+import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.FieldSetMapper;
@@ -24,10 +28,13 @@ import org.springframework.batch.item.file.transform.LineTokenizer;
 import org.springframework.batch.item.file.transform.PatternMatchingCompositeLineTokenizer;
 import org.springframework.batch.item.support.ClassifierCompositeItemWriter;
 import org.springframework.batch.item.validator.ValidatingItemProcessor;
+import org.springframework.batch.item.xml.StaxEventItemReader;
+import org.springframework.batch.item.xml.builder.StaxEventItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -49,10 +56,14 @@ public class ImportDataJobConfiguration {
         return this.jobBuilderFactory
                 .get("importClubDataJob")
                 .start(importClubUpdatesStep())
+                .next(importTransactionsStep())
+                .next(applyClubTransactionsStep())
                 .incrementer(new RunIdIncrementer())
                 .build();
     }
 
+
+    // region Importing Club Data
     @Bean
     public Step importClubUpdatesStep() throws Exception {
         return this.stepBuilderFactory
@@ -176,4 +187,85 @@ public class ImportDataJobConfiguration {
                 .dataSource(dataSource)
                 .build();
     }
+
+    // endregion
+
+    // region Executing bank transactions
+    @Bean
+    public Step importTransactionsStep() {
+        return this.stepBuilderFactory
+                .get("importTransactionsStep")
+                .<Transaction, Transaction>chunk(100)
+                .reader(transactionItemReader(null))
+                .writer(transactionItemWriter(null))
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public StaxEventItemReader<Transaction> transactionItemReader(
+            @Value("#{jobParameters['transactionFile']}") Resource transactionFile) {
+        Jaxb2Marshaller unmarshaller = new Jaxb2Marshaller();
+        unmarshaller.setClassesToBeBound(Transaction.class);
+        return new StaxEventItemReaderBuilder<Transaction>()
+                .name("transactionItemReader")
+                .resource(transactionFile)
+                .addFragmentRootElements("transaction")
+                .unmarshaller(unmarshaller)
+                .build();
+    }
+
+    @Bean
+    public JdbcBatchItemWriter<Transaction> transactionItemWriter(DataSource dataSource) {
+        return new JdbcBatchItemWriterBuilder<Transaction>()
+                .dataSource(dataSource)
+                .sql("INSERT INTO transaction(transaction_id, account_id, description, credit, debit, creation_timestamp) " +
+                        "VALUES (:transactionId, :accountId, :description, :credit, :debit, :creationTimestamp)")
+                .beanMapped()
+                .build();
+    }
+
+    // endregion
+
+    // region Applying club transactions
+
+    @Bean
+    public Step applyClubTransactionsStep() {
+        return stepBuilderFactory
+                .get("applyClubTransactionsStep")
+                .<Transaction, Transaction>chunk(100)
+                .reader(applyClubTransactionReader(null))
+                .writer(applyClubTransactionWriter(null))
+                .build();
+    }
+
+    @Bean
+    public JdbcCursorItemReader<Transaction> applyClubTransactionReader(DataSource dataSource) {
+        return new JdbcCursorItemReaderBuilder<Transaction>()
+                .name("applyClubTransactionReader")
+                .dataSource(dataSource)
+                .sql("SELECT transaction_id, account_id, description, credit, debit, creation_timestamp " +
+                        "FROM transaction ORDER BY creation_timestamp")
+                .rowMapper((resultSet, i) ->
+                        new Transaction(
+                                resultSet.getLong("transaction_id"),
+                                resultSet.getLong("account_id"),
+                                resultSet.getString("description"),
+                                resultSet.getBigDecimal("credit"),
+                                resultSet.getBigDecimal("debit"),
+                                resultSet.getTimestamp("creation_timestamp")))
+                .build();
+    }
+
+    @Bean
+    public JdbcBatchItemWriter applyClubTransactionWriter(DataSource dataSource) {
+        return new JdbcBatchItemWriterBuilder<Transaction>()
+                .dataSource(dataSource)
+                .sql("UPDATE account SET balance = balance + :transactionAmount WHERE account_id = :accountId")
+                .beanMapped()
+                .assertUpdates(false)
+                .build();
+    }
+
+    // end region
 }

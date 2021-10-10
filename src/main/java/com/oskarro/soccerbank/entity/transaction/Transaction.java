@@ -1,7 +1,9 @@
 package com.oskarro.soccerbank.entity.transaction;
 
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -12,6 +14,8 @@ import java.util.Objects;
 @XmlRootElement(name = "transaction")
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
 public class Transaction {
 
     private long transactionId;
@@ -19,11 +23,11 @@ public class Transaction {
     private String description;
     private BigDecimal credit;
     private BigDecimal debit;
-    private Date timestamp;
+    private Date creationTimestamp;
 
     @XmlJavaTypeAdapter(JaxbDateSerializer.class)
     public void setTimestamp(Date timestamp) {
-        this.timestamp = timestamp;
+        this.creationTimestamp = timestamp;
     }
 
     public BigDecimal getTransactionAmount() {
