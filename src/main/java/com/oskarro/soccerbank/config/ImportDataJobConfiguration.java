@@ -318,16 +318,13 @@ public class ImportDataJobConfiguration {
         return itemWriter;
     }
 
-    @Autowired
-    private ResourceLoader resourceLoader;
-
     @Bean
     @StepScope
     public MultiResourceItemWriter<Statement> statementItemWriter(
             @Value("#{jobParameters['outputDirectory']}") Resource outputDirectory) {
         return new MultiResourceItemWriterBuilder<Statement>()
                 .name("statementItemWriter")
-                .resource(resourceLoader.getResource("classpath:"+outputDirectory))
+                .resource(outputDirectory)
                 .itemCountLimitPerResource(1)
                 .delegate(singleStatementItemWriter())
                 .build();
