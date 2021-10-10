@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<transactions>
+    <transaction>
+        <transactionId>314121</transactionId>
+        <accountId>1</accountId>
+        <description>Selling Marco Pedroso</description>
+        <credit/>
+        <debit>-490000</debit>
+        <timestamp>2021-02-01 20:11:03</timestamp>
+    </transaction>
+</transactions>
