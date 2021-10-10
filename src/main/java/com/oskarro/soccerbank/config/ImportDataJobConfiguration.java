@@ -1,11 +1,12 @@
 package com.oskarro.soccerbank.config;
 
-import com.oskarro.soccerbank.batch.ClubDataItemValidator;
-import com.oskarro.soccerbank.batch.ClubDataUpdateClassifier;
+import com.oskarro.soccerbank.batch.*;
 import com.oskarro.soccerbank.entity.clubData.ClubDataAddressUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataBaseUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataContactUpdate;
 import com.oskarro.soccerbank.entity.clubData.ClubDataUpdate;
+import com.oskarro.soccerbank.entity.statement.Club;
+import com.oskarro.soccerbank.entity.statement.Statement;
 import com.oskarro.soccerbank.entity.transaction.Transaction;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -21,7 +22,10 @@ import org.springframework.batch.item.database.JdbcCursorItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.FlatFileItemWriter;
+import org.springframework.batch.item.file.MultiResourceItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.item.file.builder.MultiResourceItemWriterBuilder;
 import org.springframework.batch.item.file.mapping.FieldSetMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.batch.item.file.transform.LineTokenizer;
@@ -30,10 +34,12 @@ import org.springframework.batch.item.support.ClassifierCompositeItemWriter;
 import org.springframework.batch.item.validator.ValidatingItemProcessor;
 import org.springframework.batch.item.xml.StaxEventItemReader;
 import org.springframework.batch.item.xml.builder.StaxEventItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 
 import javax.sql.DataSource;
@@ -58,10 +64,10 @@ public class ImportDataJobConfiguration {
                 .start(importClubUpdatesStep())
                 .next(importTransactionsStep())
                 .next(applyClubTransactionsStep())
+                .next(generateStatementsStep(null))
                 .incrementer(new RunIdIncrementer())
                 .build();
     }
-
 
     // region Importing Club Data
     @Bean
@@ -267,5 +273,65 @@ public class ImportDataJobConfiguration {
                 .build();
     }
 
-    // end region
+    // endregion
+
+    // region Generating statements
+
+    @Bean
+    public Step generateStatementsStep(AccountItemProcessor itemProcessor) {
+        return this.stepBuilderFactory
+                .get("generateStatementsStep")
+                .<Statement, Statement>chunk(1)
+                .reader(statementItemReader(null))
+                .processor(itemProcessor)
+                .writer(statementItemWriter(null))
+                .build();
+    }
+
+    @Bean
+    public JdbcCursorItemReader statementItemReader(DataSource dataSource) {
+        return new JdbcCursorItemReaderBuilder<Statement>()
+                .name("statementItemReader")
+                .dataSource(dataSource)
+                .sql("SELECT * FROM club")
+                .rowMapper((resultSet, i) -> {
+                    Club club = Club.builder()
+                            .id(resultSet.getLong("club_id"))
+                            .name(resultSet.getString("name"))
+                            .address(resultSet.getString("address"))
+                            .emailAddress(resultSet.getString("email_address"))
+                            .phone(resultSet.getString("phone"))
+                            .notification(resultSet.getString("is_notified"))
+                            .yearOfFoundation(resultSet.getInt("year_of_foundation"))
+                            .build();
+                    return new Statement(club);
+                })
+                .build();
+    }
+
+    @Bean
+    public FlatFileItemWriter<Statement> singleStatementItemWriter() {
+        FlatFileItemWriter<Statement> itemWriter = new FlatFileItemWriter<>();
+        itemWriter.setName("singleStatementItemWriter");
+        itemWriter.setHeaderCallback(new StatementHeaderCallback());
+        itemWriter.setLineAggregator(new StatementLineAggregator());
+        return itemWriter;
+    }
+
+    @Autowired
+    private ResourceLoader resourceLoader;
+
+    @Bean
+    @StepScope
+    public MultiResourceItemWriter<Statement> statementItemWriter(
+            @Value("#{jobParameters['outputDirectory']}") Resource outputDirectory) {
+        return new MultiResourceItemWriterBuilder<Statement>()
+                .name("statementItemWriter")
+                .resource(resourceLoader.getResource("classpath:"+outputDirectory))
+                .itemCountLimitPerResource(1)
+                .delegate(singleStatementItemWriter())
+                .build();
+    }
+
+    // endregion
 }

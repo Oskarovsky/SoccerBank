@@ -1,10 +1,12 @@
 package com.oskarro.soccerbank.entity.statement;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
+@Builder
 public class Club {
 
     private final long id;

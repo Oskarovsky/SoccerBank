@@ -9,7 +9,6 @@ import java.util.List;
 
 @Getter
 @Setter
-@NoArgsConstructor
 public class Statement {
 
     private Club club;
@@ -18,5 +17,9 @@ public class Statement {
     public Statement(Club club, List<Account> accounts) {
         this.club = club;
         this.accounts.addAll(accounts);
+    }
+
+    public Statement(Club club) {
+        this.club = club;
     }
 }
