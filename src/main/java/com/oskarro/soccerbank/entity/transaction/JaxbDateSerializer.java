@@ -1,4 +1,4 @@
-package com.oskarro.soccerbank.entity;
+package com.oskarro.soccerbank.entity.transaction;
 
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import java.text.SimpleDateFormat;

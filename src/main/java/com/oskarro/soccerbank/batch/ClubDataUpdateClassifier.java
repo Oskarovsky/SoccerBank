@@ -1,9 +1,9 @@
-package com.oskarro.soccerbank.config;
+package com.oskarro.soccerbank.batch;
 
-import com.oskarro.soccerbank.entity.ClubDataAddressUpdate;
-import com.oskarro.soccerbank.entity.ClubDataBaseUpdate;
-import com.oskarro.soccerbank.entity.ClubDataContactUpdate;
-import com.oskarro.soccerbank.entity.ClubDataUpdate;
+import com.oskarro.soccerbank.entity.clubData.ClubDataAddressUpdate;
+import com.oskarro.soccerbank.entity.clubData.ClubDataBaseUpdate;
+import com.oskarro.soccerbank.entity.clubData.ClubDataContactUpdate;
+import com.oskarro.soccerbank.entity.clubData.ClubDataUpdate;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.classify.Classifier;

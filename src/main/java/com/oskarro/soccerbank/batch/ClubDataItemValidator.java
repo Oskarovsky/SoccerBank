@@ -1,6 +1,6 @@
-package com.oskarro.soccerbank.config;
+package com.oskarro.soccerbank.batch;
 
-import com.oskarro.soccerbank.entity.ClubDataUpdate;
+import com.oskarro.soccerbank.entity.clubData.ClubDataUpdate;
 import org.springframework.batch.item.validator.ValidationException;
 import org.springframework.batch.item.validator.Validator;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;

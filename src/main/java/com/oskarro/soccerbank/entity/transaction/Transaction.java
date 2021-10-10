@@ -1,4 +1,4 @@
-package com.oskarro.soccerbank.entity;
+package com.oskarro.soccerbank.entity.transaction;
 
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;

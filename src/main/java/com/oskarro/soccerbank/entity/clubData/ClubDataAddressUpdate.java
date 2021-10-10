@@ -1,4 +1,4 @@
-package com.oskarro.soccerbank.entity;
+package com.oskarro.soccerbank.entity.clubData;
 
 import lombok.Getter;
 import lombok.Setter;
