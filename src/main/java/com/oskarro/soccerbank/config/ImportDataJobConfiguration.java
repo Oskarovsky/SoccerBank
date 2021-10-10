@@ -8,6 +8,7 @@ import com.oskarro.soccerbank.entity.clubData.ClubDataUpdate;
 import com.oskarro.soccerbank.entity.statement.Club;
 import com.oskarro.soccerbank.entity.statement.Statement;
 import com.oskarro.soccerbank.entity.transaction.Transaction;
+import io.micrometer.core.instrument.util.IOUtils;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
@@ -38,11 +39,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
 
 import javax.sql.DataSource;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -318,13 +326,19 @@ public class ImportDataJobConfiguration {
         return itemWriter;
     }
 
+    @Autowired
+    ResourceLoader resourceLoader;
+
     @Bean
     @StepScope
     public MultiResourceItemWriter<Statement> statementItemWriter(
             @Value("#{jobParameters['outputDirectory']}") Resource outputDirectory) {
+        final String ROOT_PATH = "file://home/oskarro/";
+        ClassPathResource classPathResource = new ClassPathResource(ROOT_PATH + outputDirectory.getFilename());
+        Resource resource = resourceLoader.getResource(classPathResource.getPath());
         return new MultiResourceItemWriterBuilder<Statement>()
                 .name("statementItemWriter")
-                .resource(outputDirectory)
+                .resource(resource)
                 .itemCountLimitPerResource(1)
                 .delegate(singleStatementItemWriter())
                 .build();
