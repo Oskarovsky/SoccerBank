@@ -9,11 +9,13 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
+import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.FieldSetMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
@@ -26,7 +28,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
-import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -48,13 +49,14 @@ public class ImportDataJobConfiguration {
         return this.jobBuilderFactory
                 .get("importClubDataJob")
                 .start(importClubUpdatesStep())
+                .incrementer(new RunIdIncrementer())
                 .build();
     }
 
     @Bean
     public Step importClubUpdatesStep() throws Exception {
         return this.stepBuilderFactory
-                .get("importClubUpdates")
+                .get("importClubUpdatesStep")
                 .<ClubDataUpdate, ClubDataUpdate>chunk(100)
                 .reader(clubDataUpdateItemReader(null))
                 .processor(clubDataValidatingItemProcessor(null))
@@ -64,8 +66,8 @@ public class ImportDataJobConfiguration {
 
     @Bean
     @StepScope
-    public ItemReader<? extends ClubDataUpdate> clubDataUpdateItemReader(@Value("#{jobParameters['clubData']}") Resource inputFile)
-            throws Exception {
+    public FlatFileItemReader<ClubDataUpdate> clubDataUpdateItemReader(
+            @Value("#{jobParameters['clubData']}") Resource inputFile) throws Exception {
         return new FlatFileItemReaderBuilder<ClubDataUpdate>()
                 .name("clubDataUpdateItemReader")
                 .resource(inputFile)
@@ -122,15 +124,14 @@ public class ImportDataJobConfiguration {
     }
 
     @Bean
-    public ItemProcessor<? super ClubDataUpdate, ? extends ClubDataUpdate> clubDataValidatingItemProcessor(
-            ClubDataItemValidator validator) {
+    public ItemProcessor<ClubDataUpdate, ClubDataUpdate> clubDataValidatingItemProcessor(ClubDataItemValidator validator) {
         ValidatingItemProcessor<ClubDataUpdate> clubDataUpdateValidatingItemProcessor = new ValidatingItemProcessor<>(validator);
         clubDataUpdateValidatingItemProcessor.setFilter(true);
         return clubDataUpdateValidatingItemProcessor;
     }
 
     @Bean
-    public ItemWriter<? super ClubDataUpdate> clubDataUpdateItemWriter() {
+    public ItemWriter<ClubDataUpdate> clubDataUpdateItemWriter() {
         ClubDataUpdateClassifier classifier = new ClubDataUpdateClassifier(
                 clubDataBaseUpdateJdbcBatchItemWriter(null),
                 clubDataAddressUpdateJdbcBatchItemWriter(null),
@@ -146,7 +147,7 @@ public class ImportDataJobConfiguration {
                 .beanMapped()
                 .sql("UPDATE club " +
                         "SET name = COALESCE(:name, name), " +
-                        "SET year_of_foundation = COALESCE(:yearOfFoundation, year_of_foundation)" +
+                        "year_of_foundation = COALESCE(:yearOfFoundation, year_of_foundation) " +
                         "WHERE club_id = :clubId")
                 .dataSource(dataSource)
                 .build();
@@ -157,7 +158,7 @@ public class ImportDataJobConfiguration {
         return new JdbcBatchItemWriterBuilder<ClubDataUpdate>()
                 .beanMapped()
                 .sql("UPDATE club " +
-                        "SET address = COALESCE(:address1, address), " +
+                        "SET address = COALESCE(:address1, address) " +
                         "WHERE club_id = :clubId")
                 .dataSource(dataSource)
                 .build();
@@ -168,9 +169,9 @@ public class ImportDataJobConfiguration {
         return new JdbcBatchItemWriterBuilder<ClubDataUpdate>()
                 .beanMapped()
                 .sql("UPDATE club " +
-                        "SET email_address = COALESCE(:emailAddress, email_address)" +
-                        "SET phone = COALESCE(:phone, phone)" +
-                        "SET is_notified = COALESCE(:notification, is_notified)" +
+                        "SET email_address = COALESCE(:emailAddress, email_address), " +
+                        "phone = COALESCE(:phone, phone), " +
+                        "is_notified = COALESCE(:notification, is_notified) " +
                         "WHERE club_id = :clubId")
                 .dataSource(dataSource)
                 .build();
